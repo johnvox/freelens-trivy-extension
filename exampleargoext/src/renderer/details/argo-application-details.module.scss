@@ -1,0 +1,41 @@
+.argoApplicationDetails {
+  .title {
+    margin-top: calc(var(--unit) * 2);
+    margin-bottom: var(--unit);
+  }
+
+  .sourceSection {
+    margin-bottom: var(--unit);
+    padding-left: var(--unit);
+    border-left: 2px solid var(--colorBorder);
+  }
+
+  .sourceDetails {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    div {
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+  }
+
+  .operationTimeline {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    div {
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+  }
+
+  .syncPolicyControls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--unit) * 1);
+    align-items: center;
+  }
+}

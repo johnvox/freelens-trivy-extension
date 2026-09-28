@@ -1,0 +1,45 @@
+.chartContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+// ArgoCD Application Status Colors using FreeLens color variables
+:global(.SeveritySummaryChart) {
+  --severity-summary-critical: #B91C1C;
+  --severity-summary-high: #F97316;
+  --severity-summary-medium: #EAB308;
+  --severity-summary-low: #16A34A;
+  --severity-summary-unknown: #7C3AED;
+  --severity-summary-none: #94A3B8;
+}
+
+.title {
+  margin: 0 0 calc(var(--unit) * 1.5) 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--textColorPrimary);
+  text-align: left;
+}
+
+.chart {
+  flex: 1;
+  position: relative;
+  min-height: 300px;
+}
+
+.noData {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--textColorSecondary);
+  font-style: italic;
+}
+
+.loadingText {
+  font-size: 12px;
+  margin-top: 8px;
+  opacity: 0.7;
+}

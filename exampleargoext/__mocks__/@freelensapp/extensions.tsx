@@ -1,0 +1,217 @@
+import React from "react";
+
+type AnyRecord = Record<string, any>;
+
+const noop = () => {};
+
+// Component helpers
+const passthrough =
+  (name: string) =>
+  ({ children }: AnyRecord) => <div data-testid={name}>{children}</div>;
+
+const textComponent =
+  (name: string) =>
+  ({ children, title }: AnyRecord) => <span data-testid={name}>{children ?? title}</span>;
+
+const KubeObjectListLayout = ({ store, items, renderTableContents }: AnyRecord) => {
+  const rows = items ?? store?.items ?? [];
+
+  return (
+    <div data-testid="KubeObjectListLayout">
+      {rows.map((row: AnyRecord, rowIndex: number) => (
+        <div data-testid="KubeObjectListLayoutRow" key={`${row?.getName?.() ?? rowIndex}-${rowIndex}`}>
+          {(renderTableContents?.(row) ?? []).map((cell: React.ReactNode, cellIndex: number) => (
+            <div data-testid="KubeObjectListLayoutCell" key={`${rowIndex}-${cellIndex}`}>
+              {cell}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Jest-callable components we want to introspect in tests if needed
+export const PieChart = jest.fn(({ data }: AnyRecord) => (
+  <div data-testid="PieChart" data-labels={JSON.stringify(data?.labels ?? [])}>
+    PieChart
+  </div>
+));
+
+export const Renderer = {
+  LensExtension: class {},
+  Component: {
+    // charts
+    PieChart,
+
+    // overview page
+    Events: passthrough("Events"),
+    NamespaceSelectFilter: passthrough("NamespaceSelectFilter"),
+    TabLayout: passthrough("TabLayout"),
+    Tabs: ({ children, onChange }: AnyRecord) => (
+      <div data-testid="Tabs">
+        {React.Children.map(children, (child) =>
+          React.isValidElement(child) ? React.cloneElement(child, { onSelect: onChange }) : child,
+        )}
+      </div>
+    ),
+    Tab: ({ label, value, onSelect }: AnyRecord) => (
+      <button type="button" data-testid="Tab" onClick={() => onSelect?.(value)}>
+        {label}
+      </button>
+    ),
+
+    // details page
+    BadgeBoolean: ({ value }: { value: boolean }) => <span data-testid="BadgeBoolean">{value ? "true" : "false"}</span>,
+    DrawerTitle: textComponent("DrawerTitle"),
+    DrawerItem: ({ name, children }: { name: string; children: React.ReactNode }) => (
+      <div data-testid="DrawerItem">
+        <div data-testid="DrawerItemName">{name}</div>
+        <div data-testid="DrawerItemContent">{children}</div>
+      </div>
+    ),
+    Gutter: passthrough("Gutter"),
+    Table: passthrough("Table"),
+    TableHead: passthrough("TableHead"),
+    TableRow: ({ children, id, className }: AnyRecord) => (
+      <div data-testid="TableRow" id={id} className={className}>
+        {children}
+      </div>
+    ),
+    TableCell: passthrough("TableCell"),
+    TableOrderBy: undefined as any,
+
+    // list page (not currently tested, but harmless to include)
+    KubeObjectAge: passthrough("KubeObjectAge"),
+    KubeObjectListLayout,
+    WithTooltip: ({ children, tooltip }: AnyRecord) => (
+      <div data-testid="WithTooltip" data-tooltip={tooltip}>
+        {children}
+      </div>
+    ),
+
+    // dialog & inputs
+    Dialog: ({ children }: AnyRecord) => <div data-testid="Dialog">{children}</div>,
+    Input: ({ value, onChange, multiLine, rows: _rows, ...props }: AnyRecord) => {
+      const shared = {
+        "data-testid": "Input",
+        value: value ?? "",
+        onChange: (event: any) => onChange?.(event.target.value, event),
+        ...props,
+      };
+      return multiLine ? <textarea {...shared} /> : <input {...shared} />;
+    },
+    Button: ({ onClick, children, disabled }: AnyRecord) => (
+      <button type="button" data-testid="Button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    ),
+    Checkbox: ({ label, value, onChange }: AnyRecord) => (
+      <label>
+        <input
+          type="checkbox"
+          aria-label={label}
+          checked={!!value}
+          onChange={(event) => onChange?.(event.target.checked)}
+        />
+        {label}
+      </label>
+    ),
+    Notifications: {
+      ok: jest.fn(),
+      error: jest.fn(),
+    },
+    ConfirmDialog: {
+      confirm: jest.fn(async () => true),
+    },
+
+    // menu
+    MenuItem: ({ onClick, children }: AnyRecord) => (
+      <button type="button" data-testid="MenuItem" onClick={onClick}>
+        {children}
+      </button>
+    ),
+    Icon: passthrough("Icon"),
+  },
+
+  // minimal K8sApi bits for pages using stores
+  K8sApi: {
+    namespaceStore: {
+      items: [],
+      loadAll: async () => {},
+      subscribe: () => noop,
+    },
+    apiManager: {
+      registerStore: noop,
+    },
+    namespacesApi: {
+      formatUrlForNotListing: ({ name }: { name: string }) => `/api/v1/namespaces/${name}`,
+    },
+    configMapStore: {
+      items: [],
+      contextItems: [],
+      loadAll: async () => {},
+      subscribe: () => noop,
+      create: jest.fn(),
+      patch: jest.fn(),
+      remove: jest.fn(),
+    },
+    secretsStore: {
+      items: [],
+      contextItems: [],
+      loadAll: async () => {},
+      subscribe: () => noop,
+      create: jest.fn(),
+      patch: jest.fn(),
+      remove: jest.fn(),
+    },
+    KubeObjectMetadata: class {},
+    LensExtensionKubeObject: class {},
+    KubeApi: class {},
+    KubeObjectStore: class {},
+  },
+
+  Navigation: {
+    getDetailsUrl: (url: string) => url,
+  },
+
+  Ipc: class {
+    constructor(_extension: any) {}
+    invoke = jest.fn(async () => ({ status: 200, bodyText: "{}" }));
+    listen = jest.fn(() => noop);
+    handle = jest.fn();
+  },
+} as const;
+
+export const Main = {
+  LensExtension: class {},
+  Ipc: class {
+    constructor(_extension: any) {}
+    invoke = jest.fn(async () => ({ status: 200, bodyText: "{}" }));
+    listen = jest.fn(() => noop);
+    handle = jest.fn();
+  },
+} as const;
+
+export const Common = {
+  logger: {
+    error: noop,
+  },
+  Util: {
+    stopPropagation: noop,
+  },
+  Store: {
+    ExtensionStore: class {
+      constructor(_opts?: any) {}
+
+      static getInstanceOrCreate(this: any) {
+        if (!this.__instance) {
+          this.__instance = new this();
+        }
+        return this.__instance;
+      }
+
+      loadExtension() {}
+    },
+  },
+} as const;

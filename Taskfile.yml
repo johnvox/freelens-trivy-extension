@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+vars:
+  GREETING: Hello, world!
+
+tasks:
+    helm:install:
+      desc: Install the Trivy Operator using Helm
+      cmds:
+        - >
+          helm install trivy-operator oci://ghcr.io/aquasecurity/helm-charts/trivy-operator
+          --namespace trivy-system
+          --create-namespace
+          --values example/values.yaml
+          --version 0.32.1
+    helm:upgrade:
+      desc: Upgrade the Trivy Operator using Helm
+      cmds:
+        - >
+          helm upgrade trivy-operator oci://ghcr.io/aquasecurity/helm-charts/trivy-operator
+          --namespace trivy-system 
+          --version 0.32.1
+          --values example/values.yaml
+    helm:reset:
+      cmds:
+        - helm uninstall trivy-operator  --namespace trivy-system
+    pack:
+      cmds:
+        - rm -rf out *.tgz
+        - pnpm pack:dev
+    build:
+      cmd: pnpm build
+    sync:
+      deps:
+        - pack
+      cmds: 
+        - rm -rf ~/.freelens/extensions/freelensapp--trivy-extension/*
+        - cp package.json ~/.freelens/extensions/freelensapp--trivy-extension/package.json
+        - cp -r out ~/.freelens/extensions/freelensapp--trivy-extension/out

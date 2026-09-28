@@ -1,0 +1,17 @@
+## Ignore files handled by Biome
+*.css
+*.html
+*.js
+*.json
+*.json5
+*.jsonc
+*.jsx
+*.md
+*.mjs
+*.mts
+*.cjs
+*.ts
+*.tsx
+*.xml
+*.yaml
+.pnpm-store

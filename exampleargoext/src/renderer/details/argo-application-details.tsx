@@ -1,0 +1,653 @@
+import { Renderer } from "@freelensapp/extensions";
+import { observer } from "mobx-react";
+import { useRef, useState } from "react";
+import { withErrorPage } from "../components/error-page";
+import { ConditionsList, ResourceEventsSection, StatusBadge } from "../components/shared";
+import {
+  type ApplicationAutomatedSyncPolicy,
+  type ApplicationHistoryEntry,
+  getApplicationAutomatedSyncPolicy,
+  hasRollbackSourceMetadata,
+  rollbackApplication,
+  setApplicationAutomatedSync,
+} from "../endpoints/argo-application-endpoints";
+import { ArgoApplication, ArgoApplicationResourceSyncStatus, getArgoApplicationStore } from "../k8s/argocd";
+import {
+  type ApplicationResourceDiagnostic,
+  buildApplicationResourceKey,
+  buildOperationTimeline,
+  isOutOfSyncStatus,
+  summarizeApplicationHealth,
+} from "../k8s/argocd/application-diagnostics";
+import { getRollbackApplicationConfirmCopy, runGuardedArgoMutation } from "../mutations";
+import { createEnumFromKeys } from "../utils";
+import { ApplicationDiffPanel } from "./application-diff-panel";
+import { ApplicationDriftHotspotsTable } from "./application-drift-hotspots-table";
+import styles from "./argo-application-details.module.scss";
+import stylesInline from "./argo-application-details.module.scss?inline";
+
+const {
+  Component: { Button, Checkbox, DrawerTitle, DrawerItem, Gutter, Table, TableHead, TableRow, TableCell, WithTooltip },
+} = Renderer;
+
+const terminalOperationPhases = new Set(["Succeeded", "Failed", "Error"]);
+
+const resourcesSortable = {
+  name: (appResourceStatus: ArgoApplicationResourceSyncStatus) => appResourceStatus.name,
+  status: (appResourceStatus: ArgoApplicationResourceSyncStatus) => appResourceStatus.status,
+  kind: (appResourceStatus: ArgoApplicationResourceSyncStatus) => appResourceStatus.kind,
+  health: (appResourceStatus: ArgoApplicationResourceSyncStatus) =>
+    (appResourceStatus as { health?: { status?: string } }).health?.status ?? "",
+};
+
+const resourcesSortByNames = createEnumFromKeys(resourcesSortable);
+const resourcesSortByDefault: { sortBy: keyof typeof resourcesSortable; orderBy: Renderer.Component.TableOrderBy } = {
+  sortBy: resourcesSortByNames.kind,
+  orderBy: "desc",
+};
+
+const historySortable = {
+  id: (entry: any) => entry?.id ?? 0,
+  revision: (entry: any) => entry?.revision ?? "",
+  deployedAt: (entry: any) => entry?.deployedAt ?? "",
+};
+
+const historySortByNames = createEnumFromKeys(historySortable);
+const historySortByDefault: { sortBy: keyof typeof historySortable; orderBy: Renderer.Component.TableOrderBy } = {
+  sortBy: historySortByNames.id,
+  orderBy: "desc",
+};
+
+// Helper functions for source type detection and formatting
+const getSourceType = (source: any): string => {
+  if (source?.helm) return "Helm";
+  if (source?.kustomize) return "Kustomize";
+  if (source?.directory) return "Directory";
+  if (source?.plugin) return "Plugin";
+  return "Git";
+};
+
+const formatSyncOptions = (syncOptions?: string[]): string => {
+  if (!syncOptions || syncOptions.length === 0) return "None";
+  return syncOptions.join(", ");
+};
+
+const formatRetryBackoff = (backoff?: any): string => {
+  if (!backoff) return "Default";
+  const parts: string[] = [];
+  if (backoff.duration) parts.push(`Duration: ${backoff.duration}`);
+  if (backoff.factor) parts.push(`Factor: ${backoff.factor}`);
+  if (backoff.maxDuration) parts.push(`Max: ${backoff.maxDuration}`);
+  return parts.length > 0 ? parts.join(", ") : "Default";
+};
+
+const formatPluginParameter = (parameter: any): string => {
+  if (!parameter?.name) {
+    return "Unnamed parameter";
+  }
+
+  if (parameter.string) {
+    return `${parameter.name}: ${parameter.string}`;
+  }
+
+  if (parameter.array?.length) {
+    return `${parameter.name}: ${parameter.array.join(",")}`;
+  }
+
+  if (parameter.map && Object.keys(parameter.map).length > 0) {
+    return `${parameter.name}: ${JSON.stringify(parameter.map)}`;
+  }
+
+  return `${parameter.name}: Not set`;
+};
+
+const formatDateTime = (dateString?: string): string => {
+  if (!dateString) return "N/A";
+  return new Date(dateString).toLocaleString();
+};
+
+const normalizeArray = <T,>(value: T[] | undefined | null): T[] => (Array.isArray(value) ? value : []);
+
+const formatPluginEnv = (entries: Array<{ name?: string; value?: string } | null | undefined>): string => {
+  const pairs = entries
+    .filter((entry): entry is { name?: string; value?: string } => Boolean(entry))
+    .map((entry) => `${entry.name ?? "UNKNOWN"}=${entry.value ?? ""}`);
+
+  return pairs.length > 0 ? pairs.join(", ") : "None";
+};
+
+function getRollbackDisabledReason(application: ArgoApplication, entry: ApplicationHistoryEntry): string | undefined {
+  if (application.spec?.syncPolicy?.automated) {
+    return "Auto-sync must be disabled before rollback";
+  }
+
+  if (!hasRollbackSourceMetadata(entry)) {
+    return "Source metadata unavailable for this history entry";
+  }
+
+  const phase = application.status?.operationState?.phase;
+  if (phase && !terminalOperationPhases.has(phase)) {
+    return "An operation is already in progress";
+  }
+
+  return undefined;
+}
+
+export interface ArgoApplicationDetailsProps extends Renderer.Component.KubeObjectDetailsProps<ArgoApplication> {
+  extension: Renderer.LensExtension;
+  onApplicationUpdated?: (application: ArgoApplication) => void;
+}
+
+export const ArgoApplicationDetails = observer((props: ArgoApplicationDetailsProps) => {
+  const [highlightedResourceKey, setHighlightedResourceKey] = useState<string | undefined>();
+  const [isUpdatingSyncPolicy, setIsUpdatingSyncPolicy] = useState(false);
+  const resourceDiffSectionRef = useRef<HTMLDivElement>(null);
+
+  return withErrorPage(props, () => {
+    const { object, onApplicationUpdated } = props;
+    const pluginEnv = normalizeArray(object.spec.source?.plugin?.env);
+    const pluginParameters = normalizeArray(object.spec.source?.plugin?.parameters);
+    const ignoreDifferences = normalizeArray(object.spec.ignoreDifferences);
+    const resources = normalizeArray(object.status?.resources);
+    const history = normalizeArray(object.status?.history);
+    const healthSummary = summarizeApplicationHealth(object.status);
+    const operationTimeline = buildOperationTimeline(object.status?.operationState);
+    const applicationStore = getArgoApplicationStore();
+    const applicationName = object.getName?.() ?? object.metadata?.name ?? "application";
+    const defaultNamespace = object.spec.destination?.namespace;
+    const automatedPolicy = getApplicationAutomatedSyncPolicy(object);
+    const syncPolicy = object.spec?.syncPolicy;
+
+    const handleViewDiff = (resource: ApplicationResourceDiagnostic) => {
+      const resourceKey = buildApplicationResourceKey(resource, defaultNamespace);
+      setHighlightedResourceKey(resourceKey);
+      requestAnimationFrame(() => {
+        resourceDiffSectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      });
+    };
+
+    const toDiffResource = (
+      resource: ArgoApplicationResourceSyncStatus & { namespace?: string; health?: { status?: string } },
+    ): ApplicationResourceDiagnostic => ({
+      name: resource.name ?? "Unknown",
+      kind: resource.kind ?? "Unknown",
+      namespace: resource.namespace,
+      syncStatus: resource.status,
+      healthStatus: resource.health?.status,
+    });
+
+    const handleRollback = async (entry: ApplicationHistoryEntry) => {
+      const revision = entry.revision ?? "unknown";
+      await runGuardedArgoMutation({
+        risk: "destructive",
+        actionLabel: "Rollback",
+        resourceName: applicationName,
+        run: () => rollbackApplication(applicationStore, object, entry),
+        successMessage: `Rollback to revision ${revision} requested for ${applicationName}`,
+        failureFallback: "Failed to rollback application.",
+        confirm: getRollbackApplicationConfirmCopy(applicationName, entry),
+      });
+    };
+
+    const applyAutomatedSyncPolicy = async (next: ApplicationAutomatedSyncPolicy | null) => {
+      if (isUpdatingSyncPolicy) {
+        return;
+      }
+
+      setIsUpdatingSyncPolicy(true);
+      try {
+        await runGuardedArgoMutation({
+          risk: next === null ? "destructive" : "low",
+          actionLabel: next === null ? "Disable automated sync" : "Update sync policy",
+          resourceName: applicationName,
+          run: async () => {
+            const updated = await setApplicationAutomatedSync(applicationStore, object, next);
+            if (updated) {
+              onApplicationUpdated?.(updated);
+            }
+          },
+          successMessage:
+            next === null
+              ? `Automated sync disabled for ${applicationName}`
+              : `Sync policy updated for ${applicationName}`,
+          failureFallback: "Failed to update sync policy.",
+          confirm:
+            next === null
+              ? {
+                  title: "Disable automated sync",
+                  message: `Disable automated sync for ${applicationName}? Future syncs will need to be started manually.`,
+                }
+              : undefined,
+        });
+      } finally {
+        setIsUpdatingSyncPolicy(false);
+      }
+    };
+
+    return (
+      <>
+        <style>{stylesInline}</style>
+        <div className={styles.argoApplicationDetails}>
+          <Gutter size="md" />
+
+          {/* Section 1: Source Configuration */}
+          <DrawerTitle>Source Configuration</DrawerTitle>
+          {object.spec.source ? (
+            // Single source
+            <>
+              <DrawerItem name="Repository URL">{object.spec.source.repoURL || "Not specified"}</DrawerItem>
+              <DrawerItem name="Source Type">{getSourceType(object.spec.source)}</DrawerItem>
+              {object.spec.source.targetRevision && (
+                <DrawerItem name="Target Revision">{object.spec.source.targetRevision}</DrawerItem>
+              )}
+              {object.spec.source.path && <DrawerItem name="Path">{object.spec.source.path}</DrawerItem>}
+              {object.spec.source.chart && <DrawerItem name="Chart">{object.spec.source.chart}</DrawerItem>}
+              {object.spec.source.helm && (
+                <>
+                  <DrawerItem name="Helm Version">{object.spec.source.helm.version || "Not specified"}</DrawerItem>
+                  {object.spec.source.helm.releaseName && (
+                    <DrawerItem name="Release Name">{object.spec.source.helm.releaseName}</DrawerItem>
+                  )}
+                  {object.spec.source.helm.valueFiles && object.spec.source.helm.valueFiles.length > 0 && (
+                    <DrawerItem name="Value Files">{object.spec.source.helm.valueFiles.join(", ")}</DrawerItem>
+                  )}
+                </>
+              )}
+              {object.spec.source.kustomize && (
+                <>
+                  <DrawerItem name="Kustomize Version">
+                    {object.spec.source.kustomize.version || "Not specified"}
+                  </DrawerItem>
+                  {object.spec.source.kustomize.namePrefix && (
+                    <DrawerItem name="Name Prefix">{object.spec.source.kustomize.namePrefix}</DrawerItem>
+                  )}
+                  {object.spec.source.kustomize.nameSuffix && (
+                    <DrawerItem name="Name Suffix">{object.spec.source.kustomize.nameSuffix}</DrawerItem>
+                  )}
+                </>
+              )}
+              {object.spec.source.plugin && (
+                <>
+                  <DrawerItem name="Plugin Name">{object.spec.source.plugin.name || "Not specified"}</DrawerItem>
+                  {pluginEnv.length > 0 && (
+                    <DrawerItem name="Environment Variables">{formatPluginEnv(pluginEnv)}</DrawerItem>
+                  )}
+                  {pluginParameters.length > 0 && (
+                    <DrawerItem name="Parameters">
+                      {pluginParameters.map((param) => formatPluginParameter(param)).join(", ")}
+                    </DrawerItem>
+                  )}
+                </>
+              )}
+            </>
+          ) : object.spec.sources && object.spec.sources.length > 0 ? (
+            // Multiple sources
+            object.spec.sources.map((source, idx) => (
+              <div key={idx} className={styles.sourceSection}>
+                <DrawerItem name={`Source ${idx + 1}${source.name ? ` (${source.name})` : ""}`}>
+                  <div className={styles.sourceDetails}>
+                    <div>
+                      <strong>Repository:</strong> {source.repoURL || "Not specified"}
+                    </div>
+                    <div>
+                      <strong>Type:</strong> {getSourceType(source)}
+                    </div>
+                    {source.targetRevision && (
+                      <div>
+                        <strong>Revision:</strong> {source.targetRevision}
+                      </div>
+                    )}
+                    {source.path && (
+                      <div>
+                        <strong>Path:</strong> {source.path}
+                      </div>
+                    )}
+                    {source.chart && (
+                      <div>
+                        <strong>Chart:</strong> {source.chart}
+                      </div>
+                    )}
+                    {source.plugin && (
+                      <div>
+                        <strong>Plugin:</strong> {source.plugin.name || "Not specified"}
+                      </div>
+                    )}
+                  </div>
+                </DrawerItem>
+              </div>
+            ))
+          ) : (
+            <DrawerItem name="Source">Not configured</DrawerItem>
+          )}
+
+          <Gutter size="md" />
+
+          {/* Section 2: Destination */}
+          <DrawerTitle>Destination</DrawerTitle>
+          <DrawerItem name="Cluster">
+            {object.spec.destination?.server || object.spec.destination?.name || "Not specified"}
+          </DrawerItem>
+          <DrawerItem name="Namespace">{object.spec.destination?.namespace || "Not specified"}</DrawerItem>
+
+          <Gutter size="md" />
+
+          {/* Section 2b: Diagnostics */}
+          <DrawerTitle>Diagnostics</DrawerTitle>
+          <DrawerItem name="Application Sync">
+            <StatusBadge status={healthSummary.appSyncStatus} fallbackLabel="N/A" />
+          </DrawerItem>
+          <DrawerItem name="Application Health">
+            <StatusBadge status={healthSummary.appHealthStatus} fallbackLabel="N/A" />
+          </DrawerItem>
+          <DrawerItem name="Managed Resources">{String(healthSummary.totalResources)}</DrawerItem>
+          <DrawerItem name="Out of Sync">{String(healthSummary.outOfSyncCount)}</DrawerItem>
+          <DrawerItem name="Unhealthy">{String(healthSummary.unhealthyCount)}</DrawerItem>
+          <DrawerItem name="Drift Hotspots">
+            <ApplicationDriftHotspotsTable resources={resources} onViewDiff={handleViewDiff} />
+          </DrawerItem>
+          {operationTimeline ? (
+            <DrawerItem name="Operation Timeline">
+              <div className={styles.operationTimeline}>
+                <div>
+                  <StatusBadge status={operationTimeline.phase} fallbackLabel="Unknown" />
+                </div>
+                {operationTimeline.message ? <div>{operationTimeline.message}</div> : null}
+                <div>
+                  <strong>Started:</strong> {formatDateTime(operationTimeline.startedAt)}
+                </div>
+                <div>
+                  <strong>{operationTimeline.inProgress ? "Status:" : "Finished:"}</strong>{" "}
+                  {operationTimeline.inProgress ? "In progress" : formatDateTime(operationTimeline.finishedAt)}
+                </div>
+              </div>
+            </DrawerItem>
+          ) : null}
+
+          <Gutter size="md" />
+
+          {/* Section 2c: Resource Diff */}
+          <div ref={resourceDiffSectionRef}>
+            <DrawerTitle>Resource Diff</DrawerTitle>
+            <ApplicationDiffPanel
+              resources={resources}
+              defaultNamespace={defaultNamespace}
+              highlightedResourceKey={highlightedResourceKey}
+            />
+          </div>
+
+          <Gutter size="md" />
+
+          {/* Section 3: Operation State */}
+          {object.status?.operationState && (
+            <>
+              <DrawerTitle>Operation State</DrawerTitle>
+              <DrawerItem name="Phase">{object.status.operationState.phase ?? "Unknown"}</DrawerItem>
+              <DrawerItem name="Message">{object.status.operationState.message ?? "N/A"}</DrawerItem>
+              <DrawerItem name="Started At">{formatDateTime(object.status.operationState.startedAt)}</DrawerItem>
+              <DrawerItem name="Finished At">{formatDateTime(object.status.operationState.finishedAt)}</DrawerItem>
+              <Gutter size="md" />
+            </>
+          )}
+
+          {/* Section 4: Sync Policy */}
+          <>
+            <DrawerTitle>Sync Policy</DrawerTitle>
+            <DrawerItem name="Automated Sync">
+              <div className={styles.syncPolicyControls}>
+                <Checkbox
+                  label="Automated"
+                  value={Boolean(automatedPolicy)}
+                  disabled={isUpdatingSyncPolicy}
+                  onChange={(checked) => {
+                    void applyAutomatedSyncPolicy(
+                      checked
+                        ? {
+                            prune: automatedPolicy?.prune ?? false,
+                            selfHeal: automatedPolicy?.selfHeal ?? false,
+                            allowEmpty: automatedPolicy?.allowEmpty ?? false,
+                          }
+                        : null,
+                    );
+                  }}
+                />
+              </div>
+            </DrawerItem>
+            {automatedPolicy ? (
+              <>
+                <DrawerItem name="Prune">
+                  <Checkbox
+                    label="Prune"
+                    value={Boolean(automatedPolicy.prune)}
+                    disabled={isUpdatingSyncPolicy}
+                    onChange={(checked) => {
+                      void applyAutomatedSyncPolicy({
+                        ...automatedPolicy,
+                        prune: checked,
+                      });
+                    }}
+                  />
+                </DrawerItem>
+                <DrawerItem name="Self Heal">
+                  <Checkbox
+                    label="Self Heal"
+                    value={Boolean(automatedPolicy.selfHeal)}
+                    disabled={isUpdatingSyncPolicy}
+                    onChange={(checked) => {
+                      void applyAutomatedSyncPolicy({
+                        ...automatedPolicy,
+                        selfHeal: checked,
+                      });
+                    }}
+                  />
+                </DrawerItem>
+                <DrawerItem name="Allow Empty">
+                  <Checkbox
+                    label="Allow Empty"
+                    value={Boolean(automatedPolicy.allowEmpty)}
+                    disabled={isUpdatingSyncPolicy}
+                    onChange={(checked) => {
+                      void applyAutomatedSyncPolicy({
+                        ...automatedPolicy,
+                        allowEmpty: checked,
+                      });
+                    }}
+                  />
+                </DrawerItem>
+              </>
+            ) : (
+              <DrawerItem name="Mode">Manual — sync only when requested</DrawerItem>
+            )}
+            {syncPolicy?.syncOptions && syncPolicy.syncOptions.length > 0 ? (
+              <DrawerItem name="Sync Options">{formatSyncOptions(syncPolicy.syncOptions)}</DrawerItem>
+            ) : null}
+            {syncPolicy?.retry ? (
+              <>
+                <DrawerItem name="Retry Limit">{syncPolicy.retry.limit || "Not set"}</DrawerItem>
+                <DrawerItem name="Retry Backoff">{formatRetryBackoff(syncPolicy.retry.backoff)}</DrawerItem>
+              </>
+            ) : null}
+            <Gutter size="md" />
+          </>
+
+          {/* Section 5: Advanced Settings */}
+          {ignoreDifferences.length > 0 && (
+            <>
+              <DrawerTitle>Advanced Settings</DrawerTitle>
+              <DrawerItem name="Ignore Differences">
+                <Table
+                  tableId="ignore-differences"
+                  key="argo-application-details-ignore-differences-table"
+                  scrollable={false}
+                  sortSyncWithUrl={false}
+                >
+                  <TableHead flat sticky={false}>
+                    <TableCell>Kind</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Namespace</TableCell>
+                    <TableCell>Group</TableCell>
+                  </TableHead>
+                  {ignoreDifferences.map((diff, index) => {
+                    const safeDiff = diff ?? {};
+                    const kind = safeDiff.kind ?? "Unknown";
+                    const name = typeof safeDiff.name === "string" ? safeDiff.name : "";
+                    const namespace = typeof safeDiff.namespace === "string" ? safeDiff.namespace : "";
+                    const group = typeof safeDiff.group === "string" ? safeDiff.group : "";
+                    return (
+                      <TableRow key={`${kind}-${name || "all"}-${index}`}>
+                        <TableCell>{kind}</TableCell>
+                        <TableCell>{name || "All"}</TableCell>
+                        <TableCell>{namespace || "All"}</TableCell>
+                        <TableCell>{group || "All"}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </Table>
+              </DrawerItem>
+              <Gutter size="md" />
+            </>
+          )}
+
+          {/* Section 6: Last Sync Information */}
+          <DrawerTitle>Last Sync Information</DrawerTitle>
+          <DrawerItem name="Current Revision">{object.status?.sync?.revision ?? "N/A"}</DrawerItem>
+          <DrawerItem name="Current Sync Status">
+            <StatusBadge status={object.status?.sync?.status} fallbackLabel="N/A" />
+          </DrawerItem>
+          <DrawerItem name="Last Synced Revision">{history[0]?.revision ?? "N/A"}</DrawerItem>
+          <DrawerItem name="Observed At">{formatDateTime(object.status?.observedAt)}</DrawerItem>
+          <DrawerItem name="Reconciled At">{formatDateTime(object.status?.reconciledAt)}</DrawerItem>
+
+          <Gutter size="md" />
+
+          {/* Section 7: Conditions */}
+          {object.status?.conditions && object.status.conditions.length > 0 && (
+            <>
+              <DrawerTitle>Conditions</DrawerTitle>
+              <ConditionsList
+                conditions={object.status.conditions}
+                mode="table"
+                tableId="conditions"
+                showReason={false}
+                showMessage={true}
+                showLastTransitionTime={true}
+                getMessage={(condition) => condition.message ?? (condition as { reason?: string }).reason ?? "N/A"}
+                getLastTransitionTime={(condition) => formatDateTime(condition.lastTransitionTime)}
+              />
+              <Gutter size="md" />
+            </>
+          )}
+
+          {/* Section 8: Resources Sync Status (existing table) */}
+          <DrawerTitle>Resources Sync Status</DrawerTitle>
+          <Table
+            tableId="resources"
+            key="argo-application-details-resources-table"
+            sortable={resourcesSortable}
+            sortByDefault={resourcesSortByDefault}
+            scrollable={false}
+            sortSyncWithUrl={false}
+          >
+            <TableHead flat sticky={false}>
+              <TableCell sortBy={resourcesSortByNames.name}>Name</TableCell>
+              <TableCell sortBy={resourcesSortByNames.status}>Sync Status</TableCell>
+              <TableCell sortBy={resourcesSortByNames.health}>Health</TableCell>
+              <TableCell sortBy={resourcesSortByNames.kind}>Kind</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableHead>
+            {resources.map((resource, index) => {
+              const safeResource = (resource ?? {}) as ArgoApplicationResourceSyncStatus & {
+                namespace?: string;
+                health?: { status?: string };
+              };
+              const resourceName = safeResource.name ?? "Unknown";
+              const resourceKind = safeResource.kind ?? "Unknown";
+              const resourceHealthStatus = safeResource.health?.status;
+              const diffResource = toDiffResource(safeResource);
+              return (
+                <TableRow key={`${resourceName}-${resourceKind}-${index}`} sortItem={safeResource}>
+                  <TableCell>{resourceName}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={safeResource.status} />
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={resourceHealthStatus} />
+                  </TableCell>
+                  <TableCell>{resourceKind}</TableCell>
+                  <TableCell>
+                    {isOutOfSyncStatus(safeResource.status) ? (
+                      <Button onClick={() => handleViewDiff(diffResource)}>View diff</Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </Table>
+
+          <Gutter size="md" />
+
+          {/* Section 9: Sync History */}
+          {history.length > 0 && (
+            <>
+              <DrawerTitle>Sync History</DrawerTitle>
+              <Table
+                tableId="sync-history"
+                key="argo-application-details-sync-history-table"
+                sortable={historySortable}
+                sortByDefault={historySortByDefault}
+                scrollable={false}
+                sortSyncWithUrl={false}
+              >
+                <TableHead flat sticky={false}>
+                  <TableCell sortBy={historySortByNames.id}>ID</TableCell>
+                  <TableCell sortBy={historySortByNames.revision}>Revision</TableCell>
+                  <TableCell sortBy={historySortByNames.deployedAt}>Deployed At</TableCell>
+                  <TableCell>Initiated By</TableCell>
+                  <TableCell>Source</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableHead>
+                {history.map((entry, index) => {
+                  const safeEntry = (entry ?? {}) as ApplicationHistoryEntry;
+                  const rollbackDisabledReason = getRollbackDisabledReason(object, safeEntry);
+                  return (
+                    <TableRow key={`history-${safeEntry.id ?? index}`} sortItem={safeEntry}>
+                      <TableCell>{safeEntry.id ?? "N/A"}</TableCell>
+                      <TableCell>{safeEntry.revision ?? "N/A"}</TableCell>
+                      <TableCell>{formatDateTime(safeEntry.deployedAt)}</TableCell>
+                      <TableCell>
+                        {safeEntry.initiatedBy?.username ??
+                          (safeEntry.initiatedBy?.automated ? "Automated" : "Unknown")}
+                      </TableCell>
+                      <TableCell>{safeEntry.source?.repoURL ?? safeEntry.source?.chart ?? "N/A"}</TableCell>
+                      <TableCell>
+                        {rollbackDisabledReason ? (
+                          <WithTooltip tooltip={rollbackDisabledReason}>
+                            <Button disabled onClick={() => undefined}>
+                              Rollback
+                            </Button>
+                          </WithTooltip>
+                        ) : (
+                          <Button onClick={() => handleRollback(safeEntry)}>Rollback</Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </Table>
+            </>
+          )}
+
+          <Gutter size="md" />
+          <ResourceEventsSection
+            resource={{
+              uid: object.metadata?.uid,
+              name: object.getName?.() ?? object.metadata?.name,
+              namespace: object.getNs?.() ?? object.metadata?.namespace,
+              kind: object.kind,
+              apiVersion: object.apiVersion,
+            }}
+          />
+        </div>
+      </>
+    );
+  });
+});

@@ -1,0 +1,161 @@
+// Layout aligned with Freelens WorkloadsOverview + OverviewStatuses
+// (packages/core/src/renderer/components/workloads-overview/overview.scss,
+//  overview-statuses.scss).
+
+.root {
+  --flex-gap: calc(var(--unit) * 2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--flex-gap);
+  height: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
+.header {
+  background: var(--contentColor);
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--unit) * 2);
+  padding: calc(var(--unit) * 2);
+  flex-shrink: 0;
+
+  .title {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+    color: var(--textColorPrimary);
+    font-size: var(--fontSizeHeading, 15px);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+}
+
+.namespaceFilter {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: min(100%, 220px);
+  max-width: 100%;
+
+  @media (max-width: 767px) {
+    min-width: auto;
+    width: 100%;
+  }
+}
+
+.scrollBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.loadingMessage,
+.errorMessage {
+  padding: calc(var(--unit) * 2);
+  background: var(--contentColor);
+}
+
+.loadingMessage {
+  color: var(--textColorSecondary);
+}
+
+.errorMessage {
+  color: var(--colorError);
+}
+
+.statuses {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  background: var(--contentColor);
+}
+
+.overviewStatusCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: calc(var(--unit) * 1.5);
+  padding: calc(var(--unit) * 2) calc(var(--unit) * 2) 0;
+}
+
+.overviewStatusCard {
+  border: 1px solid var(--borderColor);
+  border-radius: 6px;
+  padding: calc(var(--unit) * 1.5);
+  background: var(--layoutBackground);
+}
+
+.overviewStatusLabel {
+  color: var(--textColorSecondary);
+  font-size: var(--font-size-small);
+  margin-bottom: calc(var(--unit) * 0.5);
+}
+
+.overviewStatusValue {
+  color: var(--textColorPrimary);
+  font-size: var(--font-size-h3);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.healthSummary {
+  padding: calc(var(--unit) * 2) calc(var(--unit) * 2) 0;
+}
+
+.summaryTitle {
+  margin: 0;
+  color: var(--textColorPrimary);
+}
+
+.summaryText {
+  margin-top: var(--unit);
+  color: var(--textColorSecondary);
+  word-break: break-word;
+}
+
+.emptyState {
+  margin: calc(var(--unit) * 2) calc(var(--unit) * 2) 0;
+  padding: calc(var(--unit) * 2);
+  border: 1px dashed var(--borderColor);
+  border-radius: 4px;
+  color: var(--textColorSecondary);
+}
+
+.chartsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  justify-content: space-evenly;
+  gap: calc(var(--unit) * 2);
+  padding: calc(var(--unit) * 2);
+}
+
+.chart {
+  min-width: 0;
+}
+
+.apiNamespaceSelect {
+  min-height: 32px;
+  min-width: 180px;
+  max-width: 100%;
+  padding: 0 calc(var(--unit) * 1);
+  border: 1px solid var(--borderColor);
+  border-radius: 4px;
+  background: var(--inputBackground, var(--mainBackground));
+  color: var(--textColorPrimary);
+}
+
+.eventsNote {
+  margin: 0 calc(var(--unit) * 2);
+  padding: calc(var(--unit) * 1.5);
+  border: 1px solid var(--borderColor);
+  border-radius: 4px;
+  color: var(--textColorSecondary);
+  background: var(--layoutBackground);
+  font-size: 13px;
+}

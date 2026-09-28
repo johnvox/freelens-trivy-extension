@@ -1,0 +1,19 @@
+.page {
+  :global(.TableCell) {
+    &.applications {
+      flex-grow: 0.45;
+    }
+
+    &.resourcesUpToDate {
+      flex-grow: 0.45;
+    }
+
+    &.hasError {
+      flex-grow: 0.35;
+    }
+
+    &.age {
+      flex-grow: 0.3;
+    }
+  }
+}
