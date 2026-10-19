@@ -4,23 +4,58 @@ import { ClusterInfraAssessmentReport, InfraAssessmentReport, InfraAssessmentRep
 import { withErrorPage } from "../../../components/error-page";
 import styles from "./page.module.scss";
 import stylesInline from "./page.module.scss?inline";
+import { LevelBadge, LevelBadgeStatus } from "../../../components/shared";
 
 const { observer } = MobxReact;
 
 const {
-  Component: { KubeObjectAge, KubeObjectListLayout, LinkToNamespace, WithTooltip },
+  Component: { KubeObjectAge, KubeObjectListLayout, LinkToNamespace, TableCell },
 } = Renderer;
 
-const sortingCallbacks = {
-  name: (object: Renderer.K8sApi.KubeObject) => object.getName(),
-  namespace: (object: Renderer.K8sApi.KubeObject) => object.getNs(),
-  age: (object: Renderer.K8sApi.KubeObject) => object.getCreationTimestamp(),
+const clusterCallbacks = {
+  name: (object: ClusterInfraAssessmentReport) => object.getName(),
+  age: (object: ClusterInfraAssessmentReport) => object.getCreationTimestamp(),
+  critical: (object: ClusterInfraAssessmentReport) => object.report?.summary.criticalCount ?? 0,
+  high: (object: ClusterInfraAssessmentReport) => object.report?.summary.highCount ?? 0,
+  medium: (object: ClusterInfraAssessmentReport) => object.report?.summary.mediumCount ?? 0,
+  low: (object: ClusterInfraAssessmentReport) => object.report?.summary.lowCount ?? 0,
+  none: (object: ClusterInfraAssessmentReport) => object.report?.summary.noneCount ?? 0,
+  unknown: (object: ClusterInfraAssessmentReport) => object.report?.summary.unknownCount ?? 0,
 };
 
-const renderTableHeader: { title: string; sortBy: keyof typeof sortingCallbacks; className?: string }[] = [
+const nsCallbacks = {
+  name: (object: InfraAssessmentReport) => object.getName(),
+  namespace: (object: InfraAssessmentReport) => object.getNs(),
+  age: (object: InfraAssessmentReport) => object.getCreationTimestamp(),
+  critical: (object: InfraAssessmentReport) => object.report?.summary?.criticalCount ?? 0,
+  high: (object: InfraAssessmentReport) => object.report?.summary?.highCount ?? 0,
+  medium: (object: InfraAssessmentReport) => object.report?.summary?.mediumCount ?? 0,
+  low: (object: InfraAssessmentReport) => object.report?.summary?.lowCount ?? 0,
+  none: (object: InfraAssessmentReport) => object.report?.summary?.noneCount ?? 0,
+  unknown: (object: InfraAssessmentReport) => object.report?.summary?.unknownCount ?? 0,
+};
+
+const renderClusterTableHeader: { title: string; sortBy: keyof typeof clusterCallbacks; className?: string }[] = [
+  { title: "Name", sortBy: "name" },
+  { title: "Critical", sortBy: "critical", className: styles.column },
+  { title: "High", sortBy: "high", className: styles.column },
+  { title: "Medium", sortBy: "medium", className: styles.column },
+  { title: "Low", sortBy: "low", className: styles.column },
+  { title: "None", sortBy: "none", className: styles.column },
+  { title: "Unknown", sortBy: "unknown", className: styles.column },
+  { title: "Age", sortBy: "age", className: styles.column },
+];
+
+const renderNsTableHeader: { title: string; sortBy: keyof typeof nsCallbacks; className?: string }[] = [
   { title: "Name", sortBy: "name" },
   { title: "Namespace", sortBy: "namespace" },
-  { title: "Age", sortBy: "age", className: styles.age },
+  { title: "Critical", sortBy: "critical", className: styles.column },
+  { title: "High", sortBy: "high", className: styles.column },
+  { title: "Medium", sortBy: "medium", className: styles.column },
+  { title: "Low", sortBy: "low", className: styles.column },
+  { title: "None", sortBy: "none", className: styles.column },
+  { title: "Unknown", sortBy: "unknown", className: styles.column },
+  { title: "Age", sortBy: "age", className: styles.column },
 ];
 
 export interface ClusterInfraAssessmentReportPageProps {
@@ -38,15 +73,18 @@ export const ClusterInfraAssessmentReportPage = observer((props: ClusterInfraAss
           tableId={`${ClusterInfraAssessmentReport.crd.plural}Table`}
           className={styles.page}
           store={store}
-          sortingCallbacks={sortingCallbacks}
-          searchFilters={[(object: Renderer.K8sApi.KubeObject) => object.getSearchFields()]}
+          sortingCallbacks={clusterCallbacks}
+          searchFilters={[(object: ClusterInfraAssessmentReport) => object.getSearchFields()]}
           // renderHeaderTitle={KubeObject.crd.title}
-          renderTableHeader={renderTableHeader}
-          renderTableContents={(object: Renderer.K8sApi.KubeObject) => [
-            <WithTooltip>{object.getName()}</WithTooltip>,
-            <LinkToNamespace namespace={object.getNs()} />,
-            // <BadgeBoolean value={KubeObject.getActive(object)} />,
-            // <WithTooltip>{KubeObject.getTitle(object) ?? "N/A"}</WithTooltip>,
+          renderTableHeader={renderClusterTableHeader}
+          renderTableContents={(object: ClusterInfraAssessmentReport) => [
+            <TableCell>{object.getName()}</TableCell>,
+            <LevelBadge count={object.report?.summary?.criticalCount ?? 0} status={LevelBadgeStatus.Critical} />,
+            <LevelBadge count={object.report?.summary?.highCount ?? 0} status={LevelBadgeStatus.High} />,
+            <LevelBadge count={object.report?.summary?.mediumCount ?? 0} status={LevelBadgeStatus.Medium} />,
+            <LevelBadge count={object.report?.summary?.lowCount ?? 0} status={LevelBadgeStatus.Low} />,
+            <LevelBadge count={object.report?.summary?.noneCount ?? 0} status={LevelBadgeStatus.None} />,
+            <LevelBadge count={object.report?.summary?.unknownCount ?? 0} status={LevelBadgeStatus.Unknown} />,
             <KubeObjectAge object={object} key="age" />,
           ]}
         />
@@ -62,7 +100,6 @@ export interface InfraAssessmentReportPageProps {
 export const InfraAssessmentReportPage = observer((props: InfraAssessmentReportPageProps) =>
   withErrorPage(props, () => {
     const store = InfraAssessmentReport.getStore<InfraAssessmentReport>();
-
     return (
       <>
         <style>{stylesInline}</style>
@@ -70,15 +107,19 @@ export const InfraAssessmentReportPage = observer((props: InfraAssessmentReportP
           tableId={`${InfraAssessmentReport.crd.plural}Table`}
           className={styles.page}
           store={store}
-          sortingCallbacks={sortingCallbacks}
-          searchFilters={[(object: Renderer.K8sApi.KubeObject) => object.getSearchFields()]}
+          sortingCallbacks={nsCallbacks}
+          searchFilters={[(object: InfraAssessmentReport) => object.getSearchFields()]}
           // renderHeaderTitle={KubeObject.crd.title}
-          renderTableHeader={renderTableHeader}
-          renderTableContents={(object: Renderer.K8sApi.KubeObject) => [
-            <WithTooltip>{object.getName()}</WithTooltip>,
+          renderTableHeader={renderNsTableHeader}
+          renderTableContents={(object: InfraAssessmentReport) => [
+            <TableCell>{object.getName()}</TableCell>,
             <LinkToNamespace namespace={object.getNs()} />,
-            // <BadgeBoolean value={KubeObject.getActive(object)} />,
-            // <WithTooltip>{KubeObject.getTitle(object) ?? "N/A"}</WithTooltip>,
+            <LevelBadge count={object.report?.summary?.criticalCount ?? 0} status={LevelBadgeStatus.Critical} />,
+            <LevelBadge count={object.report?.summary?.highCount ?? 0} status={LevelBadgeStatus.High} />,
+            <LevelBadge count={object.report?.summary?.mediumCount ?? 0} status={LevelBadgeStatus.Medium} />,
+            <LevelBadge count={object.report?.summary?.lowCount ?? 0} status={LevelBadgeStatus.Low} />,
+            <LevelBadge count={object.report?.summary?.noneCount ?? 0} status={LevelBadgeStatus.None} />,
+            <LevelBadge count={object.report?.summary?.unknownCount ?? 0} status={LevelBadgeStatus.Unknown} />,
             <KubeObjectAge object={object} key="age" />,
           ]}
         />

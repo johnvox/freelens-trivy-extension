@@ -23,7 +23,7 @@ export const InfraAssessmentReportDetails = observer((props: InfraAssessmentRepo
       <>
         <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
         <DrawerItem name="Summary">
-          <MarkdownViewer markdown={String(object.spec.summary)} />
+          <MarkdownViewer markdown={String(object.report?.summary)} />
         </DrawerItem>
       </>
     );
@@ -43,7 +43,7 @@ export const ClusterInfraAssessmentReportDetails = observer((props: ClusterInfra
       <>
         <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
         <DrawerItem name="Summary">
-          <MarkdownViewer markdown={String(object.spec.summary)} />
+          <MarkdownViewer markdown={String(object.report?.summary)} />
         </DrawerItem>
       </>
     );

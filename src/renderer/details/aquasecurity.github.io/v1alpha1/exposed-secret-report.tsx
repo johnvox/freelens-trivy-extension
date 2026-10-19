@@ -2,7 +2,7 @@ import { Renderer } from "@freelensapp/extensions";
 import * as MobxReact from "mobx-react";
 import { withErrorPage } from "../../../components/error-page";
 
-import type { VulnerabilityReport } from "../../../api/aquasecurity.github.io/v1alpha1";
+import type { ExposedSecretReport } from "../../../api/aquasecurity.github.io/v1alpha1";
 
 const { observer } = MobxReact;
 
@@ -10,7 +10,7 @@ const {
   Component: { DrawerItem, MarkdownViewer },
 } = Renderer;
 
-export interface ExposedSecretReportDetailsProps extends Renderer.Component.KubeObjectDetailsProps<VulnerabilityReport> {
+export interface ExposedSecretReportDetailsProps extends Renderer.Component.KubeObjectDetailsProps<ExposedSecretReport> {
   extension: Renderer.LensExtension;
 }
 
@@ -23,7 +23,7 @@ export const ExposedSecretReportDetails = observer((props: ExposedSecretReportDe
       <>
         <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
         <DrawerItem name="Summary">
-          <MarkdownViewer markdown={String(object.spec.summary)} />
+          <MarkdownViewer markdown={String(object.report?.summary)} />
         </DrawerItem>
       </>
     );

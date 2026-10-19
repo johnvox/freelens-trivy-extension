@@ -4,8 +4,7 @@ import * as common from "../../common";
 
 export class InfraAssessmentReport extends Renderer.K8sApi.LensExtensionKubeObject<
   Renderer.K8sApi.KubeObjectMetadata,
-  Renderer.K8sApi.KubeStatus,
-  InfraAssessmentReportData
+  Renderer.K8sApi.KubeStatus
 > {
   static readonly kind = "InfraAssessmentReport";
   static readonly namespaced = true;
@@ -17,6 +16,7 @@ export class InfraAssessmentReport extends Renderer.K8sApi.LensExtensionKubeObje
     singular: "infraassessmentreport",
     shortNames: ["infraassessment","infraassessments"],
   };  
+  readonly report?: InfraAssessmentReportData;
 }
 
 export class ClusterInfraAssessmentReport extends Renderer.K8sApi.LensExtensionKubeObject<
@@ -34,6 +34,7 @@ export class ClusterInfraAssessmentReport extends Renderer.K8sApi.LensExtensionK
     singular: "clusterinfraassessmentreport",
     shortNames: ["clusterinfraassessment"],
   };
+  readonly report?: InfraAssessmentReportData;
 }
 
 export class InfraAssessmentReportApi extends Renderer.K8sApi.KubeApi<InfraAssessmentReport> { }

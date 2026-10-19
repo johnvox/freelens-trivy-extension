@@ -4,15 +4,12 @@
       flex-grow: 1.5;
     }
 
-    &.active {
+    &.column {
       flex-grow: 0.4;
     }
 
-    &.resumed {
-      flex-grow: 0.4;
-    }
 
-    &.age {
+    &.cron {
       flex-grow: 0.3;
     }
   }

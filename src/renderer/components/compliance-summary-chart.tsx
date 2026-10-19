@@ -1,8 +1,8 @@
 import { Renderer } from "@freelensapp/extensions";
 import { observer } from "mobx-react";
 import { useEffect, useRef, useState } from "react";
-import styles from "./severity-summary-chart.module.scss";
-import stylesInline from "./severity-summary-chart.module.scss?inline";
+import styles from "./compliance-summary-chart.module.scss";
+import stylesInline from "./compliance-summary-chart.module.scss?inline";
 import { ClusterComplianceReport } from "../api/aquasecurity.github.io/v1alpha1/cluster-compliance-report";
 const {
   Component: { PieChart },
@@ -15,13 +15,13 @@ interface ComplianceSummaryChartProps {
 }
 
 export const ComplianceSummaryChart = observer(
-  ({ className, report, isLoading }: ComplianceSummaryChartProps) => {
+  ({ className, report }: ComplianceSummaryChartProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [resolvedColors, setResolvedColors] = useState<Record<string, string>>({});
 
     const complianceStatus: Record<string, number> = {
       Failed: report?.status?.summary?.failCount || 0,
-      Passed: report?.status?.summary?.passCount || 0,
+      Passed: report?.status?.summary?.passCount || 0
     };
 
     // Resolve theme colors using CSS custom properties
@@ -30,7 +30,7 @@ export const ComplianceSummaryChart = observer(
         const computedStyle = getComputedStyle(containerRef.current);
         const colorMap: Record<string, string> = {
           Failed: computedStyle.getPropertyValue("--compliance-summary-failed").trim() || "#B91C1C",
-          Passed: computedStyle.getPropertyValue("--compliance-summary-passed").trim() || "#16A34A",          
+          Passed: computedStyle.getPropertyValue("--compliance-summary-passed").trim() || "#16A34A",
         };
         setResolvedColors(colorMap);
       }
@@ -62,32 +62,16 @@ export const ComplianceSummaryChart = observer(
     };
 
     const chartOptions = {
+      showLegend: false,
       plugins: [{
-        legend: {
-          position: "bottom" as const,
-          labels: {
-            usePointStyle: true,
-            padding: 20,
-          },
-        },
         tooltip: {
           enabled: true,
         },
       }],
     };
-
-    if (report === null || Object.keys(filteredStatusCounts).length === 0) {
-      return (
-        <>
-          <style>{stylesInline}</style>
-          <div className={`${styles.chartContainer} ${className || ""}`}>
-            <h6 className={styles.title}>Trivy Report Summary</h6>
-            <div className={styles.noData}>
-              <div>{isLoading ? "Loading Trivy Reports..." : "No reports"}</div>
-            </div>
-          </div>
-        </>
-      );
+    console.log(filteredStatusCounts);
+    if (report === null || Object.keys(filteredStatusCounts).length === 0 || (complianceStatus.Failed === 0 && complianceStatus.Passed === 0)) {
+      return null;
     }
 
     return (
@@ -95,7 +79,7 @@ export const ComplianceSummaryChart = observer(
         <style>{stylesInline}</style>
         <div ref={containerRef} className={`ComplianceSummaryChart ${styles.chartContainer} ${className || ""}`}>
           <div className={styles.chart}>
-            <PieChart data={chartData} options={chartOptions} showLegend={true} title={report.metadata?.name} />
+            <PieChart data={chartData} options={chartOptions} showLegend={false} title={report.metadata?.name} />
           </div>
         </div>
       </>

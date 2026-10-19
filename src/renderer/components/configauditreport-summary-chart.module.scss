@@ -5,13 +5,13 @@
 }
 
 // ArgoCD Application Status Colors using FreeLens color variables
-:global(.SeveritySummaryChart) {
-  --severity-summary-critical: #B91C1C;
-  --severity-summary-high: #F97316;
-  --severity-summary-medium: #EAB308;
-  --severity-summary-low: #16A34A;
-  --severity-summary-unknown: #7C3AED;
-  --severity-summary-none: #94A3B8;
+:global(.ConfigAuditReportsChart) {
+  --config-report-critical: #B91C1C;
+  --config-report-high: #F97316;
+  --config-report-medium: #EAB308;
+  --config-report-low: #2563EB;
+  --config-report-unknown: #7C3AED;
+  --config-report-none: #94A3B8;
 }
 
 .title {

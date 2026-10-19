@@ -3,8 +3,7 @@ import * as common from "../../common";
 
 export class RbacAssessmentReport extends Renderer.K8sApi.LensExtensionKubeObject<
   Renderer.K8sApi.KubeObjectMetadata,
-  Renderer.K8sApi.KubeStatus,
-  RbacAssessmentReportData
+  Renderer.K8sApi.KubeStatus
 > {
   static readonly kind = "RbacAssessmentReport";
   static readonly namespaced = true;
@@ -16,12 +15,12 @@ export class RbacAssessmentReport extends Renderer.K8sApi.LensExtensionKubeObjec
     singular: "rbacassessmentreport",
     shortNames: ["rbacassessment","rbacassessments"],
   };  
+  readonly report?: RbacAssessmentReportData;
 }
 
 export class ClusterRbacAssessmentReport extends Renderer.K8sApi.LensExtensionKubeObject<
   Renderer.K8sApi.ClusterScopedMetadata,
-  Renderer.K8sApi.KubeStatus,
-  RbacAssessmentReportData
+  Renderer.K8sApi.KubeStatus
 > {
   static readonly kind = "ClusterRbacAssessmentReport";
   static readonly namespaced = false;
@@ -33,6 +32,7 @@ export class ClusterRbacAssessmentReport extends Renderer.K8sApi.LensExtensionKu
     singular: "clusterrbacassessmentreport",
     shortNames: ["clusterrbacassessmentreport"],
   };    
+  readonly report?: RbacAssessmentReportData;
 }
 
 

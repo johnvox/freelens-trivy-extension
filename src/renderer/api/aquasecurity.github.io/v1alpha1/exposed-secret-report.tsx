@@ -3,8 +3,7 @@ import * as common from "../../common";
 
 export class ExposedSecretReport extends Renderer.K8sApi.LensExtensionKubeObject<
   Renderer.K8sApi.KubeObjectMetadata,
-  Renderer.K8sApi.KubeStatus,
-  ExposedSecretReportData
+  Renderer.K8sApi.KubeStatus
 > {
   static readonly kind = "ExposedSecretReport";
   static readonly namespaced = true;
@@ -16,6 +15,7 @@ export class ExposedSecretReport extends Renderer.K8sApi.LensExtensionKubeObject
     singular: "exposedsecretreport",
     shortNames: ["exposedsecret","exposedsecrets"],
   };  
+  readonly report?: ExposedSecretReportData;
 }
 
 export class ExposedSecretReportApi extends Renderer.K8sApi.KubeApi<ExposedSecretReport> { }

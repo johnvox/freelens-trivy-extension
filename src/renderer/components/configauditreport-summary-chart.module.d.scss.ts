@@ -1,6 +1,6 @@
 declare const classNames: {
   readonly chartContainer: "chartContainer";
-  readonly severitySummaryChart: "severitySummaryChart";
+  readonly configAuditReportsChart: "configAuditReportsChart";
   readonly title: "title";
   readonly chart: "chart";
   readonly noData: "noData";

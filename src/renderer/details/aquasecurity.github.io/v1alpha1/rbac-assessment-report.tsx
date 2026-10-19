@@ -23,7 +23,7 @@ export const RbacAssessmentReportDetails = observer((props: RbacAssessmentReport
       <>
         <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
         <DrawerItem name="Summary">
-          <MarkdownViewer markdown={String(object.spec.summary)} />
+          <MarkdownViewer markdown={String(object.report?.summary)} />
         </DrawerItem>
       </>
     );
@@ -43,7 +43,7 @@ export const ClusterRbacAssessmentReportDetails = observer((props: ClusterRbacAs
       <>
         <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
         <DrawerItem name="Summary">
-          <MarkdownViewer markdown={String(object.spec.summary)} />
+          <MarkdownViewer markdown={String(object.report?.summary)} />
         </DrawerItem>
       </>
     );

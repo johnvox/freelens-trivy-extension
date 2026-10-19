@@ -3,7 +3,9 @@
   "include": ["*.ts", "src/**/*"],
   "compilerOptions": {
     "composite": true,
+    "noUnusedLocals": false,
     "esModuleInterop": true,
+    "experimentalDecorators": true,
     "moduleResolution": "node10",
     // "ignoreDeprecations": "6.0",
     "jsx": "react-jsx",

@@ -3,12 +3,12 @@ import { Renderer } from "@freelensapp/extensions";
 
 export class ConfigAuditReport extends Renderer.K8sApi.LensExtensionKubeObject<
   Renderer.K8sApi.KubeObjectMetadata,
-  Renderer.K8sApi.KubeStatus,
-  ConfigAuditReportData
+  Renderer.K8sApi.KubeStatus
 > {
   static readonly kind = "ConfigAuditReport";
   static readonly namespaced = true;
   static readonly apiBase = "/apis/aquasecurity.github.io/v1alpha1/configauditreports";
+  readonly report?: ConfigAuditReportData;
 
   static readonly crd: Renderer.K8sApi.LensExtensionKubeObjectCRD = {
     apiVersions: ["aquasecurity.github.io/v1alpha1"],
@@ -20,25 +20,43 @@ export class ConfigAuditReport extends Renderer.K8sApi.LensExtensionKubeObject<
 
 export class ClusterConfigAuditReport extends Renderer.K8sApi.LensExtensionKubeObject<
   Renderer.K8sApi.ClusterScopedMetadata,
-  Renderer.K8sApi.KubeStatus,
-  ConfigAuditReportData
+  Renderer.K8sApi.KubeStatus
 > {
   static readonly kind = "ClusterConfigAuditReport";
   static readonly namespaced = false;
   static readonly apiBase = "/apis/aquasecurity.github.io/v1alpha1/clusterconfigauditreports";
-
   static readonly crd: Renderer.K8sApi.LensExtensionKubeObjectCRD = {
     apiVersions: ["aquasecurity.github.io/v1alpha1"],
     plural: "clusterconfigauditreports",
     singular: "clusterconfigauditreport",
     shortNames: ["clusterconfigaudit"],
   };
+  readonly report?: ConfigAuditReportData;
 }
 
 export class ConfigAuditReportApi extends Renderer.K8sApi.KubeApi<ConfigAuditReport> { }
-export class ConfigAuditReportStore extends Renderer.K8sApi.KubeObjectStore<ConfigAuditReport, ConfigAuditReportApi> { }
 export class ClusterConfigAuditReportApi extends Renderer.K8sApi.KubeApi<ClusterConfigAuditReport> { }
 export class ClusterConfigAuditReportStore extends Renderer.K8sApi.KubeObjectStore<ClusterConfigAuditReport, ClusterConfigAuditReportApi> { }
+export class ConfigAuditReportStore extends Renderer.K8sApi.KubeObjectStore<ConfigAuditReport, ConfigAuditReportApi> { }
+
+let _clusterConfigAuditReportStore: ClusterConfigAuditReportStore | undefined;
+let _configAuditReportStore: ConfigAuditReportStore | undefined;
+export function getClusterConfigAuditReportStore(): ClusterConfigAuditReportStore {
+  if (!_clusterConfigAuditReportStore) {
+    const api = new ClusterConfigAuditReportApi({ objectConstructor: ClusterConfigAuditReport });
+    _clusterConfigAuditReportStore = new ClusterConfigAuditReportStore(api);
+    Renderer.K8sApi.apiManager.registerStore(_clusterConfigAuditReportStore);
+  }
+  return _clusterConfigAuditReportStore;
+}
+export function getConfigAuditReportStore(): ConfigAuditReportStore {
+  if (!_configAuditReportStore) {
+    const api = new ConfigAuditReportApi({ objectConstructor: ConfigAuditReport });
+    _configAuditReportStore = new ConfigAuditReportStore(api);
+    Renderer.K8sApi.apiManager.registerStore(_configAuditReportStore);
+  }
+  return _configAuditReportStore;
+}
 
 
 interface ConfigAuditReportData {

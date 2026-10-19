@@ -24,7 +24,7 @@ export const ConfigAuditReportDetails = observer((props: ConfigAuditReportDetail
       <>
         <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
         <DrawerItem name="Summary">
-          <MarkdownViewer markdown={String(object.spec.summary?.criticalCount)} />
+          <MarkdownViewer markdown={String(object.report?.summary?.criticalCount)} />
         </DrawerItem>
       </>
     );
@@ -44,7 +44,7 @@ export const ClusterConfigAuditReportDetails = observer((props: ClusterConfigAud
       <>
         <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
         <DrawerItem name="Summary">
-          <MarkdownViewer markdown={String(object.spec.summary?.criticalCount)} />
+          <MarkdownViewer markdown={String(object.report?.summary?.criticalCount)} />
         </DrawerItem>
       </>
     );

@@ -1,5 +1,6 @@
 import { Renderer } from "@freelensapp/extensions";
 import * as MobxReact from "mobx-react";
+import { LevelBadge,LevelBadgeStatus } from "../../../components/shared";
 import { ClusterComplianceReport, type ClusterComplianceReportApi } from "../../../api/aquasecurity.github.io/v1alpha1"
 import { withErrorPage } from "../../../components/error-page";
 import styles from "./page.module.scss";
@@ -8,7 +9,7 @@ import stylesInline from "./page.module.scss?inline";
 const { observer } = MobxReact;
 
 const {
-  Component: { KubeObjectAge, KubeObjectListLayout, LinkToNamespace, WithTooltip },
+  Component: { KubeObjectAge, KubeObjectListLayout, TableCell},
 } = Renderer;
 
 const KubeObject = ClusterComplianceReport;
@@ -17,18 +18,20 @@ type KubeObjectApi = ClusterComplianceReportApi;
 
 const sortingCallbacks = {
   name: (object: KubeObject) => object.getName(),
-  namespace: (object: KubeObject) => object.getNs(),
-  // active: (object: KubeObject) => String(KubeObject.getActive(object)),
-  // title: (object: KubeObject) => KubeObject.getTitle(object),
-  age: (object: KubeObject) => object.getCreationTimestamp(),
+  type: (object: KubeObject) => object.spec.reportType ?? "",
+  cron: (object: KubeObject) => object.spec.cron ?? "",
+  failed: (object: KubeObject) => object.status?.summary?.failCount ?? 0,
+  passed: (object: KubeObject) => object.status?.summary?.passCount ?? 0,
+  lastExecuted: (object: KubeObject) => object.getCreationTimestamp(),
 };
 
 const renderTableHeader: { title: string; sortBy: keyof typeof sortingCallbacks; className?: string }[] = [
   { title: "Name", sortBy: "name" },
-  { title: "Namespace", sortBy: "namespace" },
-  // { title: "Active", sortBy: "active", className: styles.active },
-  // { title: "Title", sortBy: "title", className: styles.title },
-  { title: "Age", sortBy: "age", className: styles.age },
+  { title: "Type", sortBy: "type" },
+  { title: "Cron Expression", sortBy: "cron", className: styles.column },
+  { title: "Check Failed", sortBy: "failed", className: styles.column },
+  { title: "Check Passed", sortBy: "passed", className: styles.column },
+  { title: "Last Executed", sortBy: "lastExecuted" },
 ];
 
 export interface ClusterComplianceReportsPageProps {
@@ -51,10 +54,11 @@ export const ClusterComplianceReportPage = observer((props: ClusterComplianceRep
           // renderHeaderTitle={KubeObject.crd.title}
           renderTableHeader={renderTableHeader}
           renderTableContents={(object: KubeObject) => [
-            <WithTooltip>{object.getName()}</WithTooltip>,
-            <LinkToNamespace namespace={object.getNs()} />,
-            // <BadgeBoolean value={KubeObject.getActive(object)} />,
-            // <WithTooltip>{KubeObject.getTitle(object) ?? "N/A"}</WithTooltip>,
+            <TableCell>{object.getName()}</TableCell>,
+            <TableCell>{object.spec?.reportType ?? "N/A"}</TableCell>,
+            <TableCell>{object.spec?.cron ?? "N/A"}</TableCell>,
+            <LevelBadge count={object.status?.summary?.failCount ?? 0} status={LevelBadgeStatus.Failed} />,
+            <LevelBadge count={object.status?.summary?.passCount ?? 0} status={LevelBadgeStatus.Passed} />,
             <KubeObjectAge object={object} key="age" />,
           ]}
         />
