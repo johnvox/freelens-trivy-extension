@@ -4,11 +4,12 @@ import * as MobxReact from "mobx-react";
 import { withErrorPage } from "../../../components/error-page";
 
 import type { ClusterComplianceReport } from "../../../api/aquasecurity.github.io/v1alpha1";
+import { LevelBadge,LevelBadgeStatus } from "../../../components/shared";
 
 const { observer } = MobxReact;
 
 const {
-  Component: { DrawerItem, MarkdownViewer },
+  Component: { DrawerItem, MarkdownViewer, DrawerTitle },
 } = Renderer;
 
 export interface ClusterComplianceReportDetailsProps extends Renderer.Component.KubeObjectDetailsProps<ClusterComplianceReport> {
@@ -22,13 +23,23 @@ export const ClusterComplianceReportDetails = observer((props: ClusterCompliance
 
     return (
       <>
-        <DrawerItem name="Api Version">{object.apiVersion}</DrawerItem>
-        <DrawerItem name="Report Type">
-          <MarkdownViewer markdown={object.spec.reportType} />
+        <DrawerTitle>Spec</DrawerTitle>
+        <DrawerItem name="Report Type">{object.spec.reportType}</DrawerItem>
+        <DrawerItem name="Cron">{object.spec.cron}</DrawerItem>
+
+        <DrawerTitle>Status</DrawerTitle>
+        <DrawerItem name="Summary">
+          <LevelBadge status={LevelBadgeStatus.Passed} count={object.status?.summary?.passCount ?? 0} prefix="Passed" />
+          <LevelBadge status={LevelBadgeStatus.Failed} count={object.status?.summary?.failCount ?? 0} prefix="Failed" />
         </DrawerItem>
-        <DrawerItem name="Cron Expression">
-          <MarkdownViewer markdown={object.spec.cron} />
-        </DrawerItem>
+
+        {/* <DrawerTitle>Details</DrawerTitle>
+        {object.status?.summaryReport?.controlCheck?.map((detail) => (
+          <DrawerItem name={detail.id} title={detail.name}>
+            <LevelBadge status={LevelBadgeStatus.Passed} count={detail.passCount ?? 0} prefix="Passed" />
+            <LevelBadge status={LevelBadgeStatus.Failed} count={detail.failCount ?? 0} prefix="Failed" />
+          </DrawerItem>
+        ))} */}
       </>
     );
   }),

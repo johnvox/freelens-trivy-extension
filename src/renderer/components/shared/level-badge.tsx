@@ -74,14 +74,16 @@ function getStatusTone(count:number, status: LevelBadgeStatus): LevelBadgeStatus
 interface StatusBadgeProps {
   count: number;
   status: LevelBadgeStatus;
+  prefix?: string;
 }
 
 // FailedBadge, PassedBadge
-export function LevelBadge({ count, status }: StatusBadgeProps) {
+export function LevelBadge({ count, status, prefix }: StatusBadgeProps) {
   const tone = getStatusTone(count, status);
 
   return (
     <span data-testid="StatusBadge" data-tone={tone} style={{ ...baseStyle, ...toneStyles[tone] }}>
+      {prefix ? `${prefix}: ` : ""}
       {count}
     </span>
   );

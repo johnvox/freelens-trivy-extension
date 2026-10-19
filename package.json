@@ -1,6 +1,6 @@
 {
   "name": "@freelensapp/trivy-extension",
-  "version": "0.0.1-177",
+  "version": "0.0.1-180",
   "description": "Trivy Operator Freelens extension",
   "repository": {
     "type": "git",
